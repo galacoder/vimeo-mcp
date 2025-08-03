@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "vimeo": {
+      "command": "node",
+      "args": ["path/to/vimeo-mcp/dist/index.js"],
+      "env": {
+        "VIMEO_ACCESS_TOKEN": "your_vimeo_access_token_here"
+      }
+    }
+  }
+}

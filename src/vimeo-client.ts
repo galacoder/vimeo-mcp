@@ -790,7 +790,7 @@ ${topicsSection}
     };
   }
 
-  async downloadTranscriptToFile(videoId: string, language: string = 'en', format: string = 'webvtt', basePath: string = '/Users/sangle/Dev/action/projects/mcp-servers/@download/vimeo'): Promise<string> {
+  async downloadTranscriptToFile(videoId: string, language: string = 'en', format: string = 'webvtt', basePath: string = './downloads/vimeo'): Promise<string> {
     // Get video details and transcript
     const videoDetails = await this.getVideoDetails(videoId);
     const transcript = await this.downloadTranscript(videoId, language, format);
@@ -815,7 +815,7 @@ ${topicsSection}
     return transcriptPath;
   }
 
-  async generateContentAnalysisFile(videoId: string, basePath: string = '/Users/sangle/Dev/action/projects/mcp-servers/@download/vimeo'): Promise<string> {
+  async generateContentAnalysisFile(videoId: string, basePath: string = './downloads/vimeo'): Promise<string> {
     // Get video details and transcript
     const videoDetails = await this.getVideoDetails(videoId);
     const transcript = await this.downloadTranscript(videoId, 'en', 'webvtt');

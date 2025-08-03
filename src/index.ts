@@ -54,16 +54,24 @@ const DownloadTranscriptToFileSchema = z.object({
   video_id: z.string().describe("The ID of the video"),
   language: z.string().default("en").optional(),
   format: z.enum(["webvtt", "srt"]).default("webvtt").optional(),
-  base_path: z.string().default("/Users/sangle/Dev/action/projects/mcp-servers/@download/vimeo").optional(),
+  base_path: z.string().default("./downloads/vimeo").optional().describe("Base directory path for saving files (relative to current working directory)"),
 });
 
 const GenerateContentAnalysisSchema = z.object({
   video_id: z.string().describe("The ID of the video"),
-  base_path: z.string().default("/Users/sangle/Dev/action/projects/mcp-servers/@download/vimeo").optional(),
+  base_path: z.string().default("./downloads/vimeo").optional().describe("Base directory path for saving files (relative to current working directory)"),
 });
 
 // Tool definitions
 const TOOLS: Tool[] = [
+  {
+    name: "vimeo_health_check",
+    description: "Check the health and connectivity of the Vimeo MCP server",
+    inputSchema: {
+      type: "object",
+      properties: {},
+    },
+  },
   {
     name: "vimeo_validate_video",
     description: "Validate a video (required for some screen recordings before updates)",
@@ -275,8 +283,8 @@ const TOOLS: Tool[] = [
         },
         base_path: { 
           type: "string", 
-          default: "/Users/sangle/Dev/action/projects/mcp-servers/@download/vimeo",
-          description: "Base directory path for saving files"
+          default: "./downloads/vimeo",
+          description: "Base directory path for saving files (relative to current working directory)"
         },
       },
       required: ["video_id"],
@@ -294,8 +302,8 @@ const TOOLS: Tool[] = [
         },
         base_path: { 
           type: "string", 
-          default: "/Users/sangle/Dev/action/projects/mcp-servers/@download/vimeo",
-          description: "Base directory path for saving files"
+          default: "./downloads/vimeo",
+          description: "Base directory path for saving files (relative to current working directory)"
         },
       },
       required: ["video_id"],
@@ -341,6 +349,8 @@ class VimeoMCPServer {
 
       try {
         switch (name) {
+          case "vimeo_health_check":
+            return await this.handleHealthCheck(args);
           case "vimeo_validate_video":
             return await this.handleValidateVideo(args);
           case "vimeo_list_videos_minimal":
@@ -400,15 +410,71 @@ class VimeoMCPServer {
 
     if (!accessToken && (!clientId || !clientSecret)) {
       throw new Error(
-        "Vimeo credentials not configured. Please set either VIMEO_ACCESS_TOKEN or both VIMEO_CLIENT_ID and VIMEO_CLIENT_SECRET."
+        "Vimeo credentials not configured. Please set either VIMEO_ACCESS_TOKEN or both VIMEO_CLIENT_ID and VIMEO_CLIENT_SECRET environment variables."
       );
     }
 
-    this.vimeoClient = new VimeoClient({
-      clientId,
-      clientSecret,
-      accessToken,
-    });
+    try {
+      this.vimeoClient = new VimeoClient({
+        clientId,
+        clientSecret,
+        accessToken,
+      });
+      
+      // Test the connection with a simple API call
+      this.validateConnection();
+    } catch (error) {
+      throw new Error(`Failed to initialize Vimeo client: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  private async validateConnection() {
+    if (!this.vimeoClient) return;
+    
+    try {
+      // Make a simple API call to validate credentials
+      await this.vimeoClient.listVideos({ per_page: 1, page: 1 });
+    } catch (error) {
+      console.warn("Warning: Vimeo credentials may be invalid or expired. Some operations may fail.");
+    }
+  }
+
+  private async handleHealthCheck(_args: unknown) {
+    const status = {
+      server: "Vimeo MCP Server",
+      version: "0.1.0",
+      status: "healthy",
+      timestamp: new Date().toISOString(),
+      credentials: {
+        access_token: !!process.env.VIMEO_ACCESS_TOKEN,
+        client_id: !!process.env.VIMEO_CLIENT_ID,
+        client_secret: !!process.env.VIMEO_CLIENT_SECRET,
+      },
+      connection: "unknown"
+    };
+
+    // Test connection if credentials are available
+    if (this.vimeoClient) {
+      try {
+        await this.vimeoClient.listVideos({ per_page: 1, page: 1 });
+        status.connection = "connected";
+      } catch (error) {
+        status.connection = "failed";
+        status.status = "degraded";
+      }
+    } else {
+      status.status = "error";
+      status.connection = "no_credentials";
+    }
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(status, null, 2),
+        },
+      ],
+    };
   }
 
   private async handleValidateVideo(args: unknown) {
